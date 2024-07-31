@@ -52,28 +52,18 @@ class Handler(WSGIRequestHandler):
 
 
 class SecureWSGIServer(WSGIServer):
-    def finish_request(self, request, client_address):
-        """
-        Negotiates SSL and then mimics BaseServer behavior.
-        """
-        request.settimeout(1.0)
-        try:
-            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            context.load_cert_chain(
-                os.path.join(CERT_DIR, "server.pem"),
-                os.path.join(CERT_DIR, "server.key"),
-            )
-            with context.wrap_socket(
-                request, server_side=True, suppress_ragged_eofs=False
-            ) as ssock:
-                self.base_environ["HTTPS"] = "yes"
-                self.RequestHandlerClass(ssock, client_address, self)
-        except Exception as e:
-            print("pytest-httpbin server hit an exception serving request: %s" % e)
-            print("attempting to ignore so the rest of the tests can run")
-        # WSGIRequestHandler seems to close the socket for us.
-        # Thanks, WSGIRequestHandler!!
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(
+            os.path.join(CERT_DIR, "server.pem"),
+            os.path.join(CERT_DIR, "server.key"),
+        )
+        self.socket = context.wrap_socket(self.socket, server_side=True, suppress_ragged_eofs=True)
 
+    def setup_environ(self):
+        super().setup_environ()
+        self.base_environ["HTTPS"] = "yes"
 
 class Server:
     """
